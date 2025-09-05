@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Mail, MessageCircle, Clock } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import emailjs from '@emailjs/browser';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -26,7 +27,7 @@ const Contact = () => {
   });
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Anti-bot validation
@@ -57,11 +58,34 @@ const Contact = () => {
       return;
     }
 
-    // Here you would typically send the form data to your backend
-    toast({
-      title: "Message sent!",
-      description: "Thank you for your message. I'll get back to you soon!",
-    });
+    // Send email using EmailJS
+    try {
+      await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_CONTACT_TEMPLATE_ID,
+        {
+          from_name: formData.name,
+          from_email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+          to_email: 'info@artbymaral.com'
+        },
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+      );
+
+      toast({
+        title: "Message sent!",
+        description: "Thank you for your message. I'll get back to you soon!",
+      });
+    } catch (error) {
+      console.error('Email send failed:', error);
+      toast({
+        title: "Error sending message",
+        description: "There was a problem sending your message. Please try again later.",
+        variant: "destructive"
+      });
+      return; // Don't reset form if email failed
+    }
 
     // Reset form and generate new math question
     setFormData({ name: "", email: "", subject: "", message: "", honeypot: "", mathAnswer: "" });

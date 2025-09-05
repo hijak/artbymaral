@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Upload, X, Camera, CreditCard } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import emailjs from '@emailjs/browser';
 
 interface UploadedFile {
   id: string;
@@ -57,7 +58,7 @@ const Purchase = () => {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (uploadedFiles.length === 0) {
@@ -88,26 +89,68 @@ const Purchase = () => {
       return;
     }
 
-    // Here you would typically process the order and integrate with Stripe
-    toast({
-      title: "Commission request received!",
-      description: "I'll review your photos and send you a custom quote within 24 hours.",
-    });
+    // Convert uploaded files to base64 for email attachment
+    const attachments = await Promise.all(
+      uploadedFiles.map(async (fileData) => {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(fileData.file);
+        });
+        return {
+          name: fileData.file.name,
+          data: base64
+        };
+      })
+    );
 
-    // Reset form and generate new math question
-    setFormData({
-      petName: "",
-      specialRequests: "",
-      contactEmail: "",
-      contactName: "",
-      honeypot: "",
-      mathAnswer: ""
-    });
-    setMathQuestion(() => {
-      const num1 = Math.floor(Math.random() * 10) + 1;
-      const num2 = Math.floor(Math.random() * 10) + 1;
-      return { num1, num2, answer: num1 + num2 };
-    });
+    // Send email using EmailJS
+    try {
+      await emailjs.send(
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
+        import.meta.env.VITE_EMAILJS_COMMISSION_TEMPLATE_ID,
+        {
+          pet_name: formData.petName,
+          special_requests: formData.specialRequests,
+          contact_name: formData.contactName,
+          contact_email: formData.contactEmail,
+          attachments: JSON.stringify(attachments),
+          to_email: 'info@artbymaral.com'
+        },
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+      );
+
+      toast({
+        title: "Commission request received!",
+        description: "I'll review your photos and send you a custom quote within 24 hours.",
+      });
+
+      // Reset form and generate new math question
+      setFormData({
+        petName: "",
+        specialRequests: "",
+        contactEmail: "",
+        contactName: "",
+        honeypot: "",
+        mathAnswer: ""
+      });
+      setMathQuestion(() => {
+        const num1 = Math.floor(Math.random() * 10) + 1;
+        const num2 = Math.floor(Math.random() * 10) + 1;
+        return { num1, num2, answer: num1 + num2 };
+      });
+
+      // Clear uploaded files
+      uploadedFiles.forEach(fileData => URL.revokeObjectURL(fileData.preview));
+      setUploadedFiles([]);
+    } catch (error) {
+      console.error('Email send failed:', error);
+      toast({
+        title: "Error sending commission request",
+        description: "There was a problem sending your request. Please try again later.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleChange = (field: string, value: string) => {
